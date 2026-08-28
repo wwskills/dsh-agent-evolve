@@ -99,10 +99,17 @@ ok('aborts long task via AbortSignal',
 
 console.log('— streamLlm —');
 
+// P0.3 fix: DSH llm.stream() takes { provider, model, messages, signal }
+// (no `input` wrapper). The mock now validates that shape so we catch
+// regressions if a caller regresses to the old `{ input: { messages } }`
+// layout.
 const mkLlm = (chunks) => ({
   async stream(opts) {
-    if (!opts || !opts.input || !Array.isArray(opts.input.messages)) {
-      throw new Error('opts.input.messages required');
+    if (!opts || typeof opts.provider !== 'string' || !opts.provider) {
+      throw new Error('opts.provider required');
+    }
+    if (!Array.isArray(opts.messages) || opts.messages.length === 0) {
+      throw new Error('opts.messages required and non-empty');
     }
     return {
       [Symbol.asyncIterator]() {
@@ -126,7 +133,7 @@ const text1 = await streamLlm(mkLlm([
   { type: 'content_block_delta', delta: { text: 'World' } },
   { type: 'content_block_delta', delta: { text: '!' } },
   { type: 'message_stop', delta: { text: '' } },
-]), { messages: [{ role: 'user', content: 'x' }] });
+]), { provider: 'deepseek', model: 'deepseek-chat', messages: [{ role: 'user', content: 'x' }] });
 ok('concatenates delta.text across chunks', text1 === 'Hello World!');
 
 const text2 = await streamLlm(mkLlm([
@@ -134,29 +141,35 @@ const text2 = await streamLlm(mkLlm([
   { type: 'content_block_delta', delta: { text: 'foo' } },
   { type: 'done' },
   { type: 'content_block_delta', delta: { text: 'should not appear' } },
-]), { messages: [{ role: 'user', content: 'x' }] });
+]), { provider: 'deepseek', messages: [{ role: 'user', content: 'x' }] });
 ok('breaks on type=done', text2 === 'foo');
 
 const text3 = await streamLlm(mkLlm([
   { type: 'text', text: 'plain text' },
   { type: 'message_stop' },
-]), { messages: [{ role: 'user', content: 'x' }] });
+]), { provider: 'deepseek', messages: [{ role: 'user', content: 'x' }] });
 ok('accepts top-level text fallback', text3 === 'plain text');
 
 const badLlm = { async stream() { return null; } };
 let streamErr = null;
-try { await streamLlm(badLlm, { messages: [{ role: 'user', content: 'hi' }] }); } catch (e) { streamErr = e; }
+try { await streamLlm(badLlm, { provider: 'deepseek', messages: [{ role: 'user', content: 'hi' }] }); } catch (e) { streamErr = e; }
 ok('rejects when stream returns non-iterable',
   streamErr && /async iterable/.test(streamErr.message));
 
 let emptyErr = null;
-try { await streamLlm(mkLlm([]), { messages: [] }); } catch (e) { emptyErr = e; }
+try { await streamLlm(mkLlm([]), { provider: 'deepseek', messages: [] }); } catch (e) { emptyErr = e; }
 ok('rejects when messages array is empty',
   emptyErr && /messages array required/.test(emptyErr.message));
 
+const noProviderErr = null;
+let noProviderErrOut = null;
+try { await streamLlm(mkLlm([]), { messages: [{ role: 'user', content: 'hi' }] }); } catch (e) { noProviderErrOut = e; }
+ok('rejects when provider missing',
+  noProviderErrOut && /provider.*required/i.test(noProviderErrOut.message));
+
 const noStream = {};
 let noStreamErr = null;
-try { await streamLlm(noStream, { messages: [{ role: 'user', content: 'hi' }] }); } catch (e) { noStreamErr = e; }
+try { await streamLlm(noStream, { provider: 'deepseek', messages: [{ role: 'user', content: 'hi' }] }); } catch (e) { noStreamErr = e; }
 ok('rejects when llm has no stream()',
   noStreamErr && /stream\(\)/.test(noStreamErr.message));
 

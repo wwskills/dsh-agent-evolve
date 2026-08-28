@@ -139,7 +139,15 @@ db.close();
 console.log('— extractLesson with stub llm —');
 
 const stubLlm = {
-  async stream() {
+  async stream(opts) {
+    // P0.3 guard: validate provider param shape so the stub mirrors the
+    // real llm.stream contract (provider required).
+    if (!opts || typeof opts.provider !== 'string' || !opts.provider) {
+      throw new Error('stubLlm: opts.provider required');
+    }
+    if (!Array.isArray(opts.messages) || opts.messages.length === 0) {
+      throw new Error('stubLlm: opts.messages required');
+    }
     return {
       [Symbol.asyncIterator]() {
         const text = '{"error_summary":"bad json parsing","root_cause":"used eval","correct_action":"use JSON.parse","rule":"never use eval on user input","confidence":0.9}';
@@ -166,12 +174,14 @@ const lesson = await extractLesson({
   text: 'no, that is wrong',
   context: [{ role: 'assistant', text: 'eval(input)' }],
   llm: stubLlm,
+  provider: 'deepseek', // P0.3 — DSH llm.stream() needs provider
 });
 ok('extractLesson parses structured output',
   lesson && lesson.error_summary === 'bad json parsing' && lesson.confidence === 0.9);
 
 const lessonBad = await extractLesson({
   text: 'foo',
+  provider: 'deepseek', // P0.3 — provider required
   llm: {
     async stream() {
       return {

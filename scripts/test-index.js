@@ -124,6 +124,18 @@ function makeMockCtx() {
 console.log('— apply() is synchronous —');
 
 const ctx = makeMockCtx();
+// P0.5 fix: with the `internal/service` listener removed, the plugin
+// now relies on the cordis `inject: ['webServer']` contract — webServer
+// must already be present when apply() runs. Stub it before apply so
+// the routes are registered on the first tryRegister() attempt (which
+// matches real DSH boot ordering).
+const _registeredWeb = [];
+ctx.setService('webServer', {
+  register(spec, label) {
+    _registeredWeb.push({ spec, label });
+    return () => {};
+  },
+});
 let applyResult = apply(ctx, {
   dbPath: '',
   enabled: true,
@@ -154,8 +166,13 @@ console.log('— ctx.on() registered —');
 
 ok('listened to session/event',
   ctx._listeners.has('session/event'));
-ok('listened to internal/service',
-  ctx._listeners.has('internal/service'));
+// P0.1 fix: turn-stopping now owns turn-driven extraction. The
+// internal/service wait is gone (P0.5 — webServer is declared in
+// `inject` so cordis waits before calling apply).
+ok('listened to agent/turn-stopping',
+  ctx._listeners.has('agent/turn-stopping'));
+ok('did NOT register internal/service listener',
+  !ctx._listeners.has('internal/service'));
 
 const sessionListener = ctx._listeners.get('session/event')?.[0];
 ok('session/event listener is global', sessionListener?.opts?.global === true);
@@ -212,17 +229,10 @@ await sessionListener.cb({ id: 's1' }, replayEv);
 const after = ctx._effects.length;
 ok('replay dedup is a no-op (no new effects)', before === after);
 
-console.log('— apply() survives a webServer service registration —');
+console.log('— webServer was already present at apply() —');
 
-// Stub webServer service with a register() method.
-const registered = [];
-ctx.setService('webServer', {
-  register(spec, label) {
-    registered.push({ spec, label });
-    return () => {};
-  },
-});
-ok('web API routes registered', registered.length >= 4,
+const registered = _registeredWeb;
+ok('web API routes registered at apply time', registered.length >= 4,
   `got: ${registered.length}`);
 
 const paths = registered.map((r) => r.spec.path);
