@@ -1,0 +1,71 @@
+# @wwskills/dsh-agent-evolve cordis patch
+#
+# Default install for the Web profile. Mounts the agent-evolve service
+# (L0 capture + L1 LLM extraction + SQLite WAL + corrections table +
+# correction-signal detection + global on/off switch).
+#
+# Apply with:
+#   dsh plugin --profile web add @wwskills/dsh-agent-evolve
+#
+# Per-profile config overrides can target `agent-evolve.config.*` keys below.
+
+- insert:
+    - id: agent-evolve
+      name: '@wwskills/dsh-agent-evolve'
+      config:
+        # Storage — defaults to $DSH_HOME/agent-evolve/evolve.db. Override
+        # per-deployment by writing your own patch layer.
+        dbPath: ${DSH_HOME}/agent-evolve/evolve.db
+
+        # Master switch — disable to silence all capture/extraction/injection.
+        # The plugin keeps emitting events but does no DB writes and registers
+        # no context providers when disabled.
+        enabled: true
+
+        # L1 extraction batch size — extract memories every N agent turns.
+        # Default 3 keeps LLM cost manageable (~50K tokens/month).
+        batchSize: 3
+
+        # LLM model — '' means follow the user's currently-active model.
+        model: ''
+
+        # LLM call timeout — extraction jobs are dropped if they don't return.
+        llmTimeoutMs: 30000
+
+        # Rule extraction threshold — when this many pending corrections
+        # accumulate, the next extraction pass will also propose a rule.
+        ruleThreshold: 5
+
+        # Rule injection token budget per turn (cap).
+        ruleTokenBudget: 800
+
+        # Persona refresh cadence (every N sessions OR every N ms).
+        personaEverySessions: 50
+        personaEveryMs: 604800000            # 7 days
+
+        # Correction signal words (Chinese + English). User-customisable
+        # via the Web UI. The default list deliberately omits "no" — too
+        # many false positives ("no problem", "no questions").
+        signalWords:
+          - '不对'
+          - '应该是'
+          - '错了'
+          - '不是这样'
+          - '重做'
+          - '别这样'
+          - '不正确'
+          - '有问题'
+          - 'wrong'
+          - 'should be'
+          - 'not like this'
+          - 'redo'
+          - 'incorrect'
+          - "that's not right"
+          - 'this is wrong'
+
+        # Embedding — auto-detect Ollama at boot, fallback to keyword search.
+        embedding:
+          autoDetect: true
+          ollamaBaseUrl: 'http://127.0.0.1:11434'
+          preferredModel: 'bge-m3'
+          timeoutMs: 1000
