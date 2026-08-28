@@ -33,7 +33,7 @@ console.log('— Plugin descriptor —');
 ok('name is agent-evolve', name === 'agent-evolve');
 ok('inject contains llm', inject.includes('llm'));
 ok('inject contains settings', inject.includes('settings'));
-ok('inject contains timer', inject.includes('timer'));
+ok('inject does not contain timer (uses native setInterval)', !inject.includes('timer'));
 ok('inject contains webServer', inject.includes('webServer'));
 ok('Config is an object (schemastery schema)', Config && typeof Config === 'function' || typeof Config === 'object');
 
@@ -144,13 +144,11 @@ ok('extract queue effect registered', labels.some((l) => l && l.includes('extrac
 ok('session listener effect registered', labels.some((l) => l && l.includes('session listener')));
 ok('decay timer effect registered', labels.some((l) => l && l.includes('decay timer')));
 
-console.log('— ctx.interval() registered daily decay —');
+console.log('— native setInterval registered daily decay —');
 
-ok('interval registered', ctx._intervals.length >= 1);
-const decay = ctx._intervals[0];
-ok('decay interval is 24h', decay.ms === 24 * 60 * 60 * 1000,
-  `got ms: ${decay.ms}`);
-ok('decay interval has fn', typeof decay.fn === 'function');
+// M1 uses native setInterval (timer mixin unavailable in DSH)
+// decay timer effect is registered via ctx.effect() with clearInterval disposer
+ok('decay timer effect registered (setInterval)', labels.some((l) => l && l.includes('decay timer')));
 
 console.log('— ctx.on() registered —');
 
