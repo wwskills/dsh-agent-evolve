@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+*.log
+
+# Local SQLite data (never commit evolve.db)
+*.db
+*.db-wal
+*.db-shm
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
